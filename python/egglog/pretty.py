@@ -8,7 +8,6 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypeAlias
 
-import black
 from typing_extensions import assert_never
 
 from .declarations import *
@@ -25,7 +24,6 @@ __all__ = [
 ]
 MAX_LINE_LENGTH = 110
 LINE_DIFFERENCE = 10
-BLACK_MODE = black.Mode(line_length=180)
 
 # Use this special character in place of the args, so that if the args are inlined
 # in the viz, they will replace it
@@ -85,12 +83,7 @@ def pretty_decl(
     if wrapping_fn:
         expr = f"{wrapping_fn}({expr})"
     program = "\n".join([*pretty.statements, expr])
-    try:
-        # TODO: Try replacing with ruff for speed
-        # https://github.com/amyreese/ruff-api
-        return black.format_str(program, mode=BLACK_MODE).strip()
-    except black.parsing.InvalidInput:
-        return program
+    return program
 
 
 def pretty_callable_ref(
@@ -487,24 +480,3 @@ class PrettyContext:
         if arg_names:
             prefix += f" {', '.join(self(a.expr) for a in arg_names)}"
         return f"{prefix}: {self(res.expr)}"
-
-
-def _plot_line_length(expr: object):  # pragma: no cover
-    """
-    Plots the number of line lengths based on different max lengths
-    """
-    global MAX_LINE_LENGTH, LINE_DIFFERENCE
-    import altair as alt
-    import pandas as pd
-
-    sizes = []
-    for line_length in range(40, 180, 10):
-        MAX_LINE_LENGTH = line_length
-        for diff in range(0, 40, 5):
-            LINE_DIFFERENCE = diff
-            new_l = len(str(expr).split())
-            sizes.append((line_length, diff, new_l))
-
-    df = pd.DataFrame(sizes, columns=["MAX_LINE_LENGTH", "LENGTH_DIFFERENCE", "n"])
-
-    return alt.Chart(df).mark_rect().encode(x="MAX_LINE_LENGTH:O", y="LENGTH_DIFFERENCE:O", color="n:Q")

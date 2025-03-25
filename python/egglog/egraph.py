@@ -24,16 +24,15 @@ from typing import (
     cast,
     get_type_hints,
     overload,
+    Callable,
 )
 
-import graphviz
 from typing_extensions import ParamSpec, Self, Unpack, assert_never
 
 from . import bindings
 from .conversion import *
 from .declarations import *
 from .egraph_state import *
-from .ipython_magic import IN_IPYTHON
 from .pretty import pretty_decl
 from .runtime import *
 from .thunk import *
@@ -1109,57 +1108,53 @@ class EGraph:
 
         return serialized
 
-    def _graphviz(self, **kwargs: Unpack[GraphvizKwargs]) -> graphviz.Source:
-        serialized = self._serialize(**kwargs)
-
-        original = serialized.to_dot()
-        # Add link to stylesheet to the graph, so that edges light up on hover
-        # https://gist.github.com/sverweij/93e324f67310f66a8f5da5c2abe94682
-        styles = """/* the lines within the edges */
-      .edge:active path,
-      .edge:hover path {
-        stroke: fuchsia;
-        stroke-width: 3;
-        stroke-opacity: 1;
-      }
-      /* arrows are typically drawn with a polygon */
-      .edge:active polygon,
-      .edge:hover polygon {
-        stroke: fuchsia;
-        stroke-width: 3;
-        fill: fuchsia;
-        stroke-opacity: 1;
-        fill-opacity: 1;
-      }
-      /* If you happen to have text and want to color that as well... */
-      .edge:active text,
-      .edge:hover text {
-        fill: fuchsia;
-      }"""
-        p = pathlib.Path(tempfile.gettempdir()) / "graphviz-styles.css"
-        p.write_text(styles)
-        with_stylesheet = original.replace("{", f'{{stylesheet="{p!s}"', 1)
-        return graphviz.Source(with_stylesheet)
-
-    def display(self, graphviz: bool = False, **kwargs: Unpack[GraphvizKwargs]) -> None:
-        """
-        Displays the e-graph.
-
-        If in IPython it will display it inline, otherwise it will write it to a file and open it.
-        """
-        from IPython.display import SVG, display
-
-        from .visualizer_widget import VisualizerWidget
-
-        if graphviz:
-            if IN_IPYTHON:
-                svg = self._graphviz(**kwargs).pipe(format="svg", quiet=True, encoding="utf-8")
-                display(SVG(svg))
-            else:
-                self._graphviz(**kwargs).render(view=True, format="svg", quiet=True)
-        else:
-            serialized = self._serialize(**kwargs)
-            VisualizerWidget(egraphs=[serialized.to_json()]).display_or_open()
+    # def _graphviz(self, **kwargs: Unpack[GraphvizKwargs]) -> graphviz.Source:
+    #     serialized = self._serialize(**kwargs)
+    #
+    #     original = serialized.to_dot()
+    #     # Add link to stylesheet to the graph, so that edges light up on hover
+    #     # https://gist.github.com/sverweij/93e324f67310f66a8f5da5c2abe94682
+    #     styles = """/* the lines within the edges */
+    #   .edge:active path,
+    #   .edge:hover path {
+    #     stroke: fuchsia;
+    #     stroke-width: 3;
+    #     stroke-opacity: 1;
+    #   }
+    #   /* arrows are typically drawn with a polygon */
+    #   .edge:active polygon,
+    #   .edge:hover polygon {
+    #     stroke: fuchsia;
+    #     stroke-width: 3;
+    #     fill: fuchsia;
+    #     stroke-opacity: 1;
+    #     fill-opacity: 1;
+    #   }
+    #   /* If you happen to have text and want to color that as well... */
+    #   .edge:active text,
+    #   .edge:hover text {
+    #     fill: fuchsia;
+    #   }"""
+    #     p = pathlib.Path(tempfile.gettempdir()) / "graphviz-styles.css"
+    #     p.write_text(styles)
+    #     with_stylesheet = original.replace("{", f'{{stylesheet="{p!s}"', 1)
+    #     return graphviz.Source(with_stylesheet)
+    #
+    # def display(self, graphviz: bool = False, **kwargs: Unpack[GraphvizKwargs]) -> None:
+    #     """
+    #     Displays the e-graph.
+    #
+    #     If in IPython it will display it inline, otherwise it will write it to a file and open it.
+    #     """
+    #     from IPython.display import SVG, display
+    #
+    #     from .visualizer_widget import VisualizerWidget
+    #
+    #     if graphviz:
+    #         self._graphviz(**kwargs).render(view=True, format="svg", quiet=True)
+    #     else:
+    #         serialized = self._serialize(**kwargs)
+    #         VisualizerWidget(egraphs=[serialized.to_json()]).display_or_open()
 
     def saturate(
         self,
@@ -1167,7 +1162,7 @@ class EGraph:
         *,
         expr: Expr | None = None,
         max: int = 1000,
-        visualize: bool = True,
+        visualize: Callable | None = None,
         **kwargs: Unpack[GraphvizKwargs],
     ) -> None:
         """
@@ -1176,29 +1171,25 @@ class EGraph:
 
         If an `expr` is passed, it's also extracted after each run and printed
         """
-        from .visualizer_widget import VisualizerWidget
 
         def to_json() -> str:
             if expr is not None:
                 print(self.extract(expr), "\n")
             return self._serialize(**kwargs).to_json()
 
-        if visualize:
-            egraphs = [to_json()]
+        if visualize is not None:
+            visualize(to_json())
         i = 0
         # Always visualize, even if we encounter an error
         try:
             while (self.run(schedule or 1).updated) and i < max:
                 i += 1
-                if visualize:
-                    egraphs.append(to_json())
+                if visualize is not None:
+                    visualize(to_json())
         except:
-            if visualize:
-                egraphs.append(to_json())
+            if visualize is not None:
+                visualize(to_json())
             raise
-        finally:
-            if visualize:
-                VisualizerWidget(egraphs=egraphs).display_or_open()
 
     @contextlib.contextmanager
     def set_current(self) -> Iterator[None]:

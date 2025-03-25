@@ -492,11 +492,6 @@ class RuntimeExpr(DelayedDeclerations):
     def __egg_pretty__(self, wrapping_fn: str | None) -> str:
         return pretty_decl(self.__egg_decls__, self.__egg_typed_expr__.expr, wrapping_fn=wrapping_fn)
 
-    def _ipython_display_(self) -> None:
-        from IPython.display import Code, display
-
-        display(Code(str(self), language="python"))
-
     def __dir__(self) -> Iterable[str]:
         class_decl = self.__egg_class_decl__
         return list(class_decl.methods) + list(class_decl.properties) + list(class_decl.preserved_methods)

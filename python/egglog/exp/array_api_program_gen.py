@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from egglog import *
 
+import numpy as np
+
 from .array_api import *
 from .program_gen import *
 
